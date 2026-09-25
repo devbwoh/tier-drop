@@ -29,12 +29,15 @@ const TIER_ROWS = [
 
 const STORAGE_ID = 'STORAGE'
 
+// 💡 props에 onDelete를 추가합니다.
 function CardView({
   card,
   onNameChange,
+  onDelete,
 }: {
   card: CardData
   onNameChange: (id: string, name: string) => void
+  onDelete: (id: string) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(card.name)
@@ -55,13 +58,15 @@ function CardView({
   }
 
   return (
+    // 💡 group 클래스를 추가하여 마우스를 올렸을 때만 삭제 버튼이 보이도록 유도합니다.
     <div 
       ref={setNodeRef}
       style={style}
-      className="relative w-32 aspect-square overflow-hidden rounded-lg border border-[#3c3c3c] bg-card shadow-sm touch-none select-none transition-all"
+      className="group relative w-32 aspect-square overflow-hidden rounded-lg border border-[#3c3c3c] bg-card shadow-sm touch-none select-none transition-all"
       {...attributes}
       {...listeners}
     >
+      {/* 1. 이미지 레이어 */}
       <img
         src={card.imageUrl}
         alt={card.name || '카드 이미지'}
@@ -69,7 +74,21 @@ function CardView({
         draggable={false}
       />
 
-      <div className="absolute bottom-0 left-0 right-0 p-1.5 pt-6 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex items-end justify-center min-h-[40px]">
+      {/* 🎯 2. 개별 카드 우측 상단 '삭제 (X)' 버튼 */}
+      <button
+        type="button"
+        // 💡 드래그 이벤트와 클릭 이벤트가 겹쳐서 오작동하지 않도록 방어막을 칩니다.
+        onPointerDown={(e) => e.stopPropagation()} 
+        onClick={() => onDelete(card.id)}
+        // 💡 평소에는 투명(opacity-0)하다가 마우스를 카드 위에 올리면 스윽 나타납니다(group-hover:opacity-100).
+        className="absolute top-1 right-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-gray-400 hover:bg-red-600 hover:text-white text-[10px] font-bold transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+        title="카드 삭제"
+      >
+        ✕
+      </button>
+
+      {/* 3. 하단 이름 레이어 */}
+      <div className="absolute bottom-0 left-0 right-0 p-1.5 pt-6 bg-gradient-to-t from-black/95 via-black/50 to-transparent flex items-end justify-center min-h-[40px]">
         {editing ? (
           <Input
             autoFocus
@@ -192,6 +211,20 @@ function App() {
     return null
   }
 
+  // 🎯 특정 ID의 카드를 찾아서 전체 칸에서 지워버리는 격리 함수
+  const deleteCard = useCallback((id: string) => {
+    setColumns((prev) => {
+      const updated = { ...prev }
+      
+      // 모든 행(SS, S, A, B, C, STORAGE)을 돌면서 해당 카드를 찾아 제거합니다.
+      for (const key of Object.keys(updated)) {
+        updated[key] = updated[key].filter((card) => card.id !== id)
+      }
+      
+      return updated
+    })
+  }, [])
+
   return (
     <div className="flex h-screen flex-col gap-4 p-4 bg-[#1e1e1e] text-white">
       <Kanban
@@ -220,7 +253,7 @@ function App() {
                     >
                       {columns[tier.id].map((card) => (
                         <KanbanItem key={card.id} value={card.id}>
-                          <CardView card={card} onNameChange={setCardName} />
+                          <CardView card={card} onNameChange={setCardName} onDelete={deleteCard} />
                         </KanbanItem>
                       ))}
                     </KanbanColumnContent>
@@ -260,7 +293,7 @@ function App() {
                   >
                     {columns[STORAGE_ID].map((card) => (
                       <KanbanItem key={card.id} value={card.id}>
-                        <CardView card={card} onNameChange={setCardName} />
+                        <CardView card={card} onNameChange={setCardName} onDelete={deleteCard} />
                       </KanbanItem>
                     ))}
                   </KanbanColumnContent>
