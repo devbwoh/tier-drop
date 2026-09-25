@@ -46,7 +46,7 @@ function CardView({
   const style = transform ? {
     transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
     transition,
-    opacity: isDragging ? 0.3 : 1, // 드래그 중일 때 투명하게 만들기
+    opacity: isDragging ? 0.3 : 1, 
   } : undefined
 
   const commit = () => {
@@ -58,18 +58,26 @@ function CardView({
     <div 
       ref={setNodeRef}
       style={style}
-      className="w-32 overflow-hidden rounded-lg border bg-card shadow-sm touch-none select-none transition-all"
+      // 💡 relative를 주어 내부 텍스트 상자가 이미지 위로 둥둥 떠서 달라붙을 기준점을 잡습니다.
+      className="relative w-32 aspect-square overflow-hidden rounded-lg border border-[#3c3c3c] bg-card shadow-sm touch-none select-none transition-all"
       {...attributes}
       {...listeners}
     >
+      {/* 1. 바탕에 깔리는 고화질 포켓몬/로봇 이미지 */}
       <img
         src={card.imageUrl}
         alt={card.name || '카드 이미지'}
-        className="aspect-square w-full object-cover"
+        className="absolute inset-0 w-full h-full object-cover"
         draggable={false}
       />
-      {editing ? (
-        <div className="p-1.5">
+
+      {/* 2. 이미지 하단에 얹어지는 반투명 검은색 그라데이션 및 흰색 텍스트 레이어 */}
+      <div 
+        // 💡 absolute bottom-0: 이미지 맨 밑바닥에 딱 붙입니다.
+        // bg-gradient-to-t from-black/80 to-black/0: 밑에서 위로 갈수록 투명해지는 검은색 그라데이션 그늘막을 만듭니다.
+        className="absolute bottom-0 left-0 right-0 p-1.5 pt-6 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex items-end justify-center min-h-[40px]"
+      >
+        {editing ? (
           <Input
             autoFocus
             value={draft}
@@ -84,23 +92,32 @@ function CardView({
               }
             }}
             onBlur={commit}
-            className="h-8 w-full rounded-md border px-2 text-center text-xs" 
+            // 💡 입력창도 다크 테마 배경에 어울리도록 배경을 살짝 어둡게 투명 처리합니다.
+            className="h-7 w-full rounded-md border border-gray-600 bg-black/60 px-1 text-center text-[11px] text-white focus:outline-none" 
           />
-        </div>
-      ) : (
-        <button
-          type="button"
-          onPointerDown={(e) => e.stopPropagation()} 
-          onClick={() => {
-            setDraft(card.name)
-            setEditing(true)
-          }}
-          className="flex w-full h-10 max-h-10 items-center justify-center text-center text-xs text-muted-foreground hover:bg-accent px-2 pt-1.5 overflow-hidden break-all line-clamp-2"
-          style={{ display: '-webkit-box', WebkitBoxOrient: 'vertical' }}
-        >
-          {card.name || '이름 입력'}
-        </button>
-      )}
+        ) : (
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()} 
+            onClick={() => {
+              setDraft(card.name)
+              setEditing(true)
+            }}
+            /* 💡 이름 유무에 따른 가독성 저격 스타일:
+              - card.name이 있으면 선명한 흰색(text-white/90 hover:text-white)
+              - card.name이 없으면 아주 흐린 투명 흰색(text-white/20 hover:text-white/40)으로 거의 티가 나지 않게 바뀝니다! 🎯
+            */
+            className={`w-full text-center text-[11px] font-medium break-all line-clamp-2 transition-colors
+              ${card.name 
+                ? "text-white/90 hover:text-white" 
+                : "text-white/20 hover:text-white/40 font-light"
+              }`}
+            style={{ display: '-webkit-box', WebkitBoxOrient: 'vertical' }}
+          >
+            {card.name || '이름 입력'}
+          </button>
+        )}
+      </div>
     </div>
   )
 }
