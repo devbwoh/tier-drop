@@ -1,0 +1,125 @@
+{
+  "project": {
+    "name": "tier-kanban",
+    "description": "Tier별(SS, S, A, B, C) 이미지 카드를 drag & drop으로 관리하는 Kanban 앱. 하단 보관함(STORAGE)에서 이미지를 업로드해 카드를 생성하고, 각 티어 구역과 보관함 사이를 드래그하여 배치한다.",
+    "language": "Korean",
+    "targetPlatform": ["Web (Vite)", "Electron (future compatibility)"]
+  },
+
+  "stack": {
+    "packageManager": "pnpm",
+    "buildTool": "Vite",
+    "framework": "React",
+    "language": "TypeScript",
+    "styling": ["Tailwind CSS", "shadcn/ui"],
+    "kanbanLibrary": "@reui/kanban (reui)",
+    "stateManagement": "React useState/useReducer (local state, no external store)"
+  },
+
+  "setupSteps": [
+    "pnpm create vite . --template react-ts",
+    "pnpm install",
+    "pnpm add tailwindcss @tailwindcss/vite",
+    "pnpm add class-variance-authority clsx tailwind-merge lucide-react",
+    "pnpm dlx shadcn@latest add @reui/kanban",
+    "pnpm dlx shadcn@latest add card",
+    "Configure shadcn/ui (components.json) and add needed primitives (button, input)",
+    "Add Tailwind v4 import to index.css (@import \"tailwindcss\")"
+  ],
+
+  "layout": {
+    "description": "화면 상단에 티어 로우(Row) 5개를 세로로(상단→하단 순서) 배치하고, 화면 하단에 STORAGE(보관함) 구역을 넓게 배치한다.",
+    "tierRows": [
+      { "id": "SS", "label": "SS" },
+      { "id": "S", "label": "S" },
+      { "id": "A", "label": "A" },
+      { "id": "B", "label": "B" },
+      { "id": "C", "label": "C" }
+    ],
+    "storageRow": {
+      "id": "STORAGE",
+      "label": "STORAGE (보관함)",
+      "note": "드래그할 카드들을 모아두는 영역. 넓게(가로 전체) 배치."
+    },
+    "arrangement": "tierRows are stacked vertically at the top; STORAGE occupies a wide area at the bottom."
+  },
+
+  "card": {
+    "structure": ["image", "name"],
+    "fields": {
+      "id": "unique string id (crypto.randomUUID())",
+      "imageUrl": "object URL or data URL of uploaded image",
+      "name": "optional text, editable by user; may be empty"
+    },
+    "renderingRules": [
+      "Card shows the image and a name area below it.",
+      "If name is empty/omitted: render only the image, sized to the card's full width (clean image-only display).",
+      "Name area is click-to-edit: clicking the name opens an inline text input for editing."
+    ]
+  },
+
+  "features": [
+    {
+      "id": "F1",
+      "name": "Image upload to STORAGE",
+      "detail": "STORAGE 영역에 [이미지 업로드] 버튼 제공. PC에서 이미지를 선택하면 보관함에 새 카드가 생성된다.",
+      "implementation": "Use <input type=\"file\" accept=\"image/*\"> + URL.createObjectURL(file) (web-standard, Electron-compatible). Do NOT rely on server upload."
+    },
+    {
+      "id": "F2",
+      "name": "Drag & drop between zones",
+      "detail": "카드를 STORAGE와 각 티어(SS/S/A/B/C) 구역 사이에서 자유롭게 drag & drop.",
+      "implementation": "Use @reui/kanban KanbanBoard/KanbanColumn/KanbanCard with onDrop/onMove callbacks to update card positions in state."
+    },
+    {
+      "id": "F3",
+      "name": "Editable name (click-to-edit)",
+      "detail": "카드의 이름 영역을 클릭하면 텍스트 입력/수정 가능. 이름을 비워두면 이미지만 표시.",
+      "implementation": "Inline input toggled on click; empty value -> image-only card."
+    }
+  ],
+
+  "dataModel": {
+    "card": {
+      "id": "string",
+      "imageUrl": "string (object URL)",
+      "name": "string (may be '')"
+    },
+    "stateShape": {
+      "columns": {
+        "SS": ["cardId"],
+        "S": ["cardId"],
+        "A": ["cardId"],
+        "B": ["cardId"],
+        "C": ["cardId"],
+        "STORAGE": ["cardId"]
+      },
+      "cards": { "<cardId>": { "id", "imageUrl", "name" } }
+    }
+  },
+
+  "uiComponents": [
+    "KanbanBoard (reui) - root board",
+    "KanbanColumn (reui) - one per tier + STORAGE",
+    "KanbanCard (reui) - each card",
+    "shadcn Button - upload button, edit controls",
+    "shadcn Input - name editing"
+  ],
+
+  "acceptanceCriteria": [
+    "pnpm dev 로 실행 시 상단에 SS/S/A/B/C 5개 티어 로우가 세로로 보인다.",
+    "하단에 넓은 STORAGE 영역이 보이고 [이미지 업로드] 버튼이 있다.",
+    "이미지를 선택하면 STORAGE에 새 카드(이미지)가 생성된다.",
+    "카드를 드래그해 SS/S/A/B/C 구역으로 옮길 수 있고, 다시 STORAGE로 되돌릴 수 있다.",
+    "카드 이름 영역을 클릭하면 텍스트를 입력/수정할 수 있다.",
+    "이름이 비어 있으면 카드에 이미지만 깔끔하게(가로폭 전체) 표시된다."
+  ],
+
+  "notes": [
+    "Electron 호환을 위해 이미지 로딩은 URL.createObjectURL 등 웹 표준 API 사용 (서버 업로드 의존 금지).",
+    "Tailwind CSS + shadcn/ui 기반 스타일링.",
+    "reui Kanban의 onDrop/onMove 시그니처: (cardId, fromColumnId, toColumnId) => void.",
+    "reui 사용 방법 문서: https://reui.io/llms.txt",
+    "shadcn/ui 사용 방법 문서: https://ui.shadcn.com/schema.json"
+  ]
+}
