@@ -235,7 +235,7 @@ function App() {
   }, [])
 
   // 💡 특정 티어 행을 삭제합니다. (STORAGE는 고정이라 제외)
-  // 💡 행에 있던 카드는 사라지지 않고 STORAGE(보관함)로 되돌려 보냅니다.
+  // 💡 행에 있던 카드는 사라지지 않고 대기 아이템으로 되돌려 보냅니다.
   const removeTierRow = useCallback((id: string) => {
     if (id === STORAGE_ID) return
     setColumns((prev) => {
@@ -244,7 +244,7 @@ function App() {
       for (const key of Object.keys(prev)) {
         if (key !== id) next[key] = prev[key]
       }
-      // 💡 삭제된 행의 카드를 보관함 끝에 추가합니다.
+      // 💡 삭제된 행의 카드를 대기 아이템 끝에 추가합니다.
       next[STORAGE_ID] = [...(next[STORAGE_ID] ?? []), ...cardsToMove]
       return next
     })
@@ -481,13 +481,13 @@ function App() {
               티어 행 추가
             </Button>
 
-            {/* 2. 하단 STORAGE (보관함) 섹션 */}
+            {/* 2. 하단 대기 아이템 섹션 */}
             <KanbanColumn value={STORAGE_ID}>
               <div className="flex flex-col rounded-lg border border-[#3c3c3c] bg-[#2d2d2d] overflow-hidden min-h-[160px]">
                 {/* 상단 컨트롤 바 */}
                 <div className="flex flex-col gap-2 border-b border-[#3c3c3c] bg-[#252526] px-4 py-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-gray-300">{STORAGE_ID} (보관함)</span>
+                    <span className="text-sm font-bold text-gray-300">대기 아이템</span>
                     <Button size="sm" onClick={() => fileInputRef.current?.click()} className="bg-blue-600 hover:bg-blue-700 h-8 w-36">
                       <Upload className="w-4 h-4 mr-2 shrink-0" />
                       이미지 업로드
@@ -535,7 +535,7 @@ function App() {
                   onChange={handleUpload}
                 />
 
-                {/* 보관함 카드 풀 구역 */}
+                {/* 대기 아이템 풀 구역 */}
                 <div className="flex-1 w-full">
                   <SortableContext items={columns[STORAGE_ID].map(c => c.id)} strategy={horizontalListSortingStrategy}>
                     <KanbanColumnContent
