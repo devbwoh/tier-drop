@@ -280,7 +280,7 @@ function App() {
   }, [])
 
   return (
-    <div className="flex h-screen flex-col gap-4 p-4 bg-[#1e1e1e] text-white">
+    <div className="flex min-h-screen flex-col gap-4 p-4 bg-[#1e1e1e] text-white">
       <header className="shrink-0 rounded-xl border border-[#3c3c3c] bg-[#252526] p-4 shadow-sm">
         <Input
           id="board-title"
