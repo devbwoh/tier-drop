@@ -2,11 +2,12 @@ import { useCallback, useRef, useState } from 'react'
 import { Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useSortable, SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable'
+import { useSortable, SortableContext, horizontalListSortingStrategy, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import {
   Kanban,
   KanbanColumn,
   KanbanColumnContent,
+  KanbanColumnHandle,
   KanbanItem,
   KanbanOverlay,
 } from '@/components/reui/kanban'
@@ -81,7 +82,7 @@ function TierLabel({
         setEditing(true)
       }}
       // 💡 별도의 배경 덧칠 없이 글자만 중앙에 깔끔하게 띄우도록 투명화했습니다.
-      className="w-full h-full cursor-pointer select-none bg-transparent text-center font-bold text-white outline-none border-0 transition-colors hover:brightness-125"
+      className={`w-full h-full cursor-pointer select-none bg-transparent text-center font-bold outline-none border-0 transition-colors hover:brightness-125 ${color}`}
       title="티어 이름 수정"
     >
       {value || '이름 입력'}
@@ -188,6 +189,7 @@ function CardView({
 
 function App() {
   const [boardTitle, setBoardTitle] = useState('나만의 티어표')
+  // 💡 카드 데이터만 보관합니다. 행 순서는 columns의 키 순서(Object.keys)가 곧 정렬 기준입니다.
   const [columns, setColumns] = useState<Columns>({
     SS: [], S: [], A: [], B: [], C: [], STORAGE: [],
   })
@@ -199,7 +201,11 @@ function App() {
   const setTierLabel = useCallback((id: string, label: string) => {
     setTierLabels((prev) => ({ ...prev, [id]: label }))
   }, [])
-  
+
+  // 💡 카드 이동은 라이브러리 기본 동작(라이브 미리보기 + 드롭 시 커밋)이 처리합니다.
+  // onMove를 주면 라이브러리가 dragOver에서 조기 반환해서 카드가 실제로 안 옮겨지므로,
+  // 카드 이동에는 onMove를 쓰지 않고 setColumns(onValueChange)로 위임합니다.
+
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -231,8 +237,27 @@ function App() {
     })
   }, [])
 
+  // 💡 티어 행을 드래그할 때, 카드가 아닌 "행 전체"를 따라다니는 미리보기(오버레이)입니다.
+  const renderColumnOverlay = ({ value }: { value: string | number }) => {
+    const tierId = String(value)
+    if (tierId === STORAGE_ID || !TIER_ROWS.some((t) => t.id === tierId)) return null
+    const tier = TIER_ROWS.find((t) => t.id === tierId)!
+    return (
+      <div className="flex rounded-lg border-2 border-dashed border-white/40 bg-[#2d2d2d]/95 shadow-xl overflow-hidden min-h-[140px]">
+        <div className={`flex w-16 items-center justify-center border-r border-[#3c3c3c] select-none text-center text-sm ${tier.color}`}>
+          {tierLabels[tierId]}
+        </div>
+        <div className="flex-1 flex flex-row flex-wrap items-center gap-3 p-3">
+          {columns[tierId].map((card) => (
+            <CardView key={card.id} card={card} onNameChange={setCardName} onDelete={noopDelete} />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   const renderOverlay = ({ value, variant }: { value: string | number; variant: 'column' | 'item' }) => {
-    if (variant !== 'item') return null
+    if (variant === 'column') return renderColumnOverlay({ value })
     for (const key of Object.keys(columns)) {
       const card = columns[key].find((c) => c.id === String(value))
       if (card) return <CardView card={card} onNameChange={setCardName} onDelete={noopDelete} />
@@ -270,25 +295,73 @@ function App() {
         onValueChange={setColumns}
         getItemValue={(item) => item.id}
       >
-        <div className="flex flex-1 flex-col gap-4 overflow-y-auto">
-          {/* 1. SS ~ C 등급 티어 리스트 섹션 (왼쪽 네온 컬러 라벨 판넬 적용) */}
-          {TIER_ROWS.map((tier) => (
-            <KanbanColumn key={tier.id} value={tier.id}>
-              <div className="flex rounded-lg border border-[#3c3c3c] bg-[#2d2d2d] overflow-hidden min-h-[140px]">
-                
-                {/* 🎯 왼쪽 등급 가로 라벨 판넬 박스 (클릭해서 이름 수정 가능!) */}
-                <div className={`flex w-16 items-center justify-center border-r border-[#3c3c3c] select-none text-center text-sm ${tier.color}`}>
-                  <TierLabel value={tierLabels[tier.id]} color={tier.color} onChange={(label) => setTierLabel(tier.id, label)} />
-                </div>
+        {/* 💡 티어 행을 세로 방향으로 정렬할 수 있는 SortableContext (STORAGE는 고정이라 제외) */}
+        <SortableContext items={Object.keys(columns).filter((id) => id !== STORAGE_ID)} strategy={verticalListSortingStrategy}>
+          <div className="flex flex-1 flex-col gap-4 overflow-y-auto">
+            {/* 1. SS ~ C 등급 티어 리스트 섹션 (왼쪽 네온 컬러 라벨 판넬 적용) */}
+            {Object.keys(columns).filter((id) => id !== STORAGE_ID).map((id) => {
+              const tier = TIER_ROWS.find((t) => t.id === id)!
+              return (
+                <KanbanColumn key={tier.id} value={tier.id}>
+                  <div className="relative flex rounded-lg border border-[#3c3c3c] bg-[#2d2d2d] overflow-hidden min-h-[140px]">
 
-                {/* 우측 카드 전개 및 드롭 구역 */}
+                    {/* 🎯 왼쪽 등급 가로 라벨 판넬 박스 (클릭해서 이름 수정 가능!) */}
+                    <div className={`flex w-16 items-center justify-center border-r border-[#3c3c3c] select-none text-center text-sm ${tier.color}`}>
+                      <TierLabel value={tierLabels[tier.id]} color={tier.color} onChange={(label) => setTierLabel(tier.id, label)} />
+                    </div>
+
+                    {/* 🎯 행 전체를 드래그해서 순서를 바꿀 수 있는 핸들 (카드 드래그와 충돌 방지용) */}
+                    <KanbanColumnHandle className="absolute left-0 top-0 bottom-0 w-2 cursor-grab active:cursor-grabbing bg-white/5 hover:bg-white/15 transition-colors z-10" />
+
+                    {/* 우측 카드 전개 및 드롭 구역 */}
+                    <div className="flex-1 w-full">
+                      <SortableContext items={columns[tier.id].map(c => c.id)} strategy={horizontalListSortingStrategy}>
+                        <KanbanColumnContent
+                          value={tier.id}
+                          className="flex flex-1 w-full h-full flex-row flex-wrap items-center gap-3 p-3 transition-all duration-200"
+                        >
+                          {columns[tier.id].map((card) => (
+                            <KanbanItem key={card.id} value={card.id}>
+                              <CardView card={card} onNameChange={setCardName} onDelete={deleteCard} />
+                            </KanbanItem>
+                          ))}
+                        </KanbanColumnContent>
+                      </SortableContext>
+                    </div>
+
+                  </div>
+                </KanbanColumn>
+              )
+            })}
+
+            {/* 2. 하단 STORAGE (보관함) 섹션 */}
+            <KanbanColumn value={STORAGE_ID}>
+              <div className="flex flex-col rounded-lg border border-[#3c3c3c] bg-[#2d2d2d] overflow-hidden min-h-[160px]">
+                {/* 상단 컨트롤 바 */}
+                <div className="flex items-center justify-between border-b border-[#3c3c3c] bg-[#252526] px-4 py-2">
+                  <span className="text-sm font-bold text-gray-300">{STORAGE_ID} (보관함)</span>
+                  <Button size="sm" onClick={() => fileInputRef.current?.click()} className="bg-blue-600 hover:bg-blue-700 h-8">
+                    <Upload className="w-4 h-4 mr-2" />
+                    이미지 업로드
+                  </Button>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleUpload}
+                />
+
+                {/* 보관함 카드 풀 구역 */}
                 <div className="flex-1 w-full">
-                  <SortableContext items={columns[tier.id].map(c => c.id)} strategy={horizontalListSortingStrategy}>
+                  <SortableContext items={columns[STORAGE_ID].map(c => c.id)} strategy={horizontalListSortingStrategy}>
                     <KanbanColumnContent
-                      value={tier.id}
-                      className="flex flex-1 w-full h-full flex-row flex-wrap items-center gap-3 p-3 transition-all duration-200"
+                      value={STORAGE_ID}
+                      className="flex flex-1 w-full h-full flex-row flex-wrap items-center gap-3 p-4"
                     >
-                      {columns[tier.id].map((card) => (
+                      {columns[STORAGE_ID].map((card) => (
                         <KanbanItem key={card.id} value={card.id}>
                           <CardView card={card} onNameChange={setCardName} onDelete={deleteCard} />
                         </KanbanItem>
@@ -296,51 +369,12 @@ function App() {
                     </KanbanColumnContent>
                   </SortableContext>
                 </div>
-
               </div>
             </KanbanColumn>
-          ))}
 
-          {/* 2. 하단 STORAGE (보관함) 섹션 */}
-          <KanbanColumn value={STORAGE_ID}>
-            <div className="flex flex-col rounded-lg border border-[#3c3c3c] bg-[#2d2d2d] overflow-hidden min-h-[160px]">
-              {/* 상단 컨트롤 바 */}
-              <div className="flex items-center justify-between border-b border-[#3c3c3c] bg-[#252526] px-4 py-2">
-                <span className="text-sm font-bold text-gray-300">{STORAGE_ID} (보관함)</span>
-                <Button size="sm" onClick={() => fileInputRef.current?.click()} className="bg-blue-600 hover:bg-blue-700 h-8">
-                  <Upload className="w-4 h-4 mr-2" />
-                  이미지 업로드
-                </Button>
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={handleUpload}
-              />
-              
-              {/* 보관함 카드 풀 구역 */}
-              <div className="flex-1 w-full">
-                <SortableContext items={columns[STORAGE_ID].map(c => c.id)} strategy={horizontalListSortingStrategy}>
-                  <KanbanColumnContent
-                    value={STORAGE_ID}
-                    className="flex flex-1 w-full h-full flex-row flex-wrap items-center gap-3 p-4"
-                  >
-                    {columns[STORAGE_ID].map((card) => (
-                      <KanbanItem key={card.id} value={card.id}>
-                        <CardView card={card} onNameChange={setCardName} onDelete={deleteCard} />
-                      </KanbanItem>
-                    ))}
-                  </KanbanColumnContent>
-                </SortableContext>
-              </div>
-            </div>
-          </KanbanColumn>
-
-          <KanbanOverlay>{renderOverlay}</KanbanOverlay>
-        </div>
+            <KanbanOverlay>{renderOverlay}</KanbanOverlay>
+          </div>
+        </SortableContext>
       </Kanban>
     </div>
   )
