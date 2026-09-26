@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Upload, Link as LinkIcon, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -244,8 +244,8 @@ function App() {
   }
 
   // 💡 붙여넣은 URL이 http(s)인지만 확인하고 즉시 보관함에 카드 추가 (CORS 차단 방지용)
-  const handleAddByUrl = () => {
-    const url = urlValue.trim()
+  const handleAddByUrl = (pastedUrl?: string) => {
+    const url = (pastedUrl ?? urlValue).trim()
     if (!url || isFetchingUrl) return
     setUrlError(null)
 
@@ -258,8 +258,39 @@ function App() {
 
     const newCard: CardData = { id: crypto.randomUUID(), imageUrl: url, name: '' }
     setColumns((prev) => ({ ...prev, STORAGE: [...prev.STORAGE, newCard] }))
-    setUrlValue('')
+    if (pastedUrl === undefined) setUrlValue('')
   }
+
+  // 💡 전역 Ctrl+V 리스너: 이미지(블롭)는 즉시 보관함에 추가, 유효한 URL 텍스트는 handleAddByUrl로 처리
+  useEffect(() => {
+    const urlRegex = /^https?:\/\/[^\s]+$/i
+    const onPaste = (e: ClipboardEvent) => {
+      // 이미지가 있는 경우 (이미지 파일 붙여넣기)
+      const items = e.clipboardData?.items
+      if (items) {
+        for (const item of Array.from(items)) {
+          if (item.kind === 'file' && item.type.startsWith('image/')) {
+            const file = item.getAsFile()
+            if (!file) continue
+            const newCard: CardData = {
+              id: crypto.randomUUID(),
+              imageUrl: URL.createObjectURL(file),
+              name: '',
+            }
+            setColumns((prev) => ({ ...prev, STORAGE: [...prev.STORAGE, newCard] }))
+          }
+        }
+      }
+
+      // 텍스트가 유효한 URL인 경우
+      const text = (e.clipboardData?.getData('text/plain') ?? '').trim()
+      if (urlRegex.test(text)) {
+        handleAddByUrl(text)
+      }
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [handleAddByUrl])
 
   const setCardName = useCallback((id: string, name: string) => {
     setColumns((prev) => {
