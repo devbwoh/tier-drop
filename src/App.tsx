@@ -424,7 +424,7 @@ function App() {
                         onFocus={handleUrlFocus}
                         onChange={(e) => { setUrlValue(e.target.value); if (urlError) setUrlError(null) }}
                         onKeyDown={(e) => { if (e.key === 'Enter') handleAddByUrl() }}
-                        placeholder="이미지 URL을 붙여넣고 Enter"
+                        placeholder="이미지 URL 주소 또는 이미지 붙여넣기 (Ctrl+V)"
                         className="h-8 w-full bg-black/30 pr-8 text-sm text-white placeholder:text-gray-500"
                       />
                       {/* 💡 텍스트가 있을 때만 나타나는 '지우기' 버튼 (입력창 우측 안쪽에 절대 위치) */}
