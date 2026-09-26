@@ -235,13 +235,17 @@ function App() {
   }, [])
 
   // 💡 특정 티어 행을 삭제합니다. (STORAGE는 고정이라 제외)
+  // 💡 행에 있던 카드는 사라지지 않고 STORAGE(보관함)로 되돌려 보냅니다.
   const removeTierRow = useCallback((id: string) => {
     if (id === STORAGE_ID) return
     setColumns((prev) => {
+      const cardsToMove = prev[id] ?? []
       const next: Columns = {}
       for (const key of Object.keys(prev)) {
         if (key !== id) next[key] = prev[key]
       }
+      // 💡 삭제된 행의 카드를 보관함 끝에 추가합니다.
+      next[STORAGE_ID] = [...(next[STORAGE_ID] ?? []), ...cardsToMove]
       return next
     })
     setTierColors((prev) => {
@@ -424,7 +428,7 @@ function App() {
               const color = tierColors[id] ?? TIER_COLORS[0]
               return (
                 <KanbanColumn key={id} value={id}>
-                  <div className="relative flex rounded-lg border border-[#3c3c3c] bg-[#2d2d2d] overflow-hidden min-h-[140px]">
+                  <div className="group relative flex rounded-lg border border-[#3c3c3c] bg-[#2d2d2d] overflow-hidden min-h-[140px]">
 
                     {/* 🎯 왼쪽 등급 가로 라벨 판넬 박스 (클릭해서 이름 수정 가능!) */}
                     <div className={`flex w-16 items-center justify-center border-r border-[#3c3c3c] select-none text-center text-sm ${color}`}>
