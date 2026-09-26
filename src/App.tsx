@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Upload, Link as LinkIcon, X, Plus, Trash2 } from 'lucide-react'
+import { toPng } from 'html-to-image'
+import { Upload, Link as LinkIcon, X, Plus, Trash2, ImageDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useSortable, SortableContext, horizontalListSortingStrategy, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -266,6 +267,50 @@ function App() {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // 💡 캡처 대상: 티어 행만 포함하는 컨테이너 (대기 아이템 섹션 제외)
+  const tierBoardRef = useRef<HTMLDivElement>(null)
+
+  // 💡 'PNG로 저장' 버튼: 계산된 슬레이트 배경과 레이아웃 스타일을 강제 적용해 투명 배경을 방지합니다.
+  const handleDownloadPNG = async () => {
+    if (!tierBoardRef.current) return
+
+    // 💡 html-to-image의 canvas 캐싱 버그를 피하기 위해, 클릭 사이에 메인 스레드를 잠시 내어줘서
+    // 브라우저가 이전 캔버스 DOM 노드를 정리하고 다음 클릭에 깨끗하게 다시 렌더링되도록 합니다.
+    const trigger = () => {
+      try {
+        // 💡 pixelRatio: 2로 캔버스 스케일 트리거를 강제해 html-to-image가 매번 새 캔버스를 생성하게 합니다.
+        toPng(tierBoardRef.current, {
+          cacheBust: false, // Turn off cache busting to protect local Blob URLs
+          pixelRatio: 2,
+          backgroundColor: '#0f172a', // Enforce solid dark slate background (bg-slate-900 equivalent)
+          style: {
+            padding: '24px',
+            borderRadius: '12px',
+          }
+        }).then((dataUrl) => {
+          const sanitizedTitle = boardTitle?.trim()
+          const fileName = sanitizedTitle ? `${sanitizedTitle}.png` : 'tier-list.png'
+
+          const link = document.createElement('a')
+          link.download = fileName
+          link.href = dataUrl
+          link.click()
+        }).catch((error) => {
+          console.error('Failed to export PNG:', error)
+        })
+      } catch (error) {
+        console.error('Failed to export PNG:', error)
+      }
+    }
+
+    // 💡 requestAnimationFrame으로 한 프레임만큼 지연시켜 이전 캔버스 노드가 정리된 뒤 캡처를 시작합니다.
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => setTimeout(trigger, 0))
+    } else {
+      setTimeout(trigger, 0)
+    }
+  }
+
   // 💡 URL 입력 상태 및 로딩/오류 표시용 상태
   const [urlValue, setUrlValue] = useState('')
   const [isFetchingUrl] = useState(false)
@@ -301,21 +346,32 @@ function App() {
   }
 
   // 💡 붙여넣은 URL이 http(s)인지만 확인하고 즉시 보관함에 카드 추가 (CORS 차단 방지용)
-  const handleAddByUrl = useCallback((pastedUrl?: string) => {
-    const url = (pastedUrl ?? urlValue).trim()
-    if (!url || isFetchingUrl) return
+  const handleAddByUrl = useCallback(async () => {
+    const targetUrl = typeof urlValue === 'string' ? urlValue.trim() : ''
+    if (!targetUrl || isFetchingUrl) return
     setUrlError(null)
 
     // 💡 fetch/헤더 검사 없이 http(s) URL이면 바로 카드 추가. 깨진 이미지는 <img> onError가 처리
     const urlRegex = /^https?:\/\/[^\s]+$/i
-    if (!urlRegex.test(url)) {
+    if (!urlRegex.test(targetUrl)) {
       setUrlError('http:// 또는 https:// 로 시작하는 유효한 URL을 입력해 주세요.')
       return
     }
 
-    const newCard: CardData = { id: crypto.randomUUID(), imageUrl: url, name: '' }
+    // 💡 카드 추가 전 fetch로 최종 리다이렉트된 고유 URL을 잠가 캔버스 재렌더 시 이미지 변경 방지
+    let resolvedUrl = targetUrl
+    try {
+      const response = await fetch(targetUrl)
+      if (response.url && /^https?:\/\//i.test(response.url)) {
+        resolvedUrl = response.url
+      }
+    } catch {
+      // fetch 실패 시 원본 URL을 기본 버퍼로 유지
+    }
+
+    const newCard: CardData = { id: crypto.randomUUID(), imageUrl: resolvedUrl, name: '' }
     setColumns((prev) => ({ ...prev, STORAGE: [...prev.STORAGE, newCard] }))
-    if (pastedUrl === undefined) setUrlValue('')
+    setUrlValue('')
   }, [urlValue, isFetchingUrl])
 
   // 💡 전역 Ctrl+V 리스너: 이미지(블롭)는 즉시 보관함에 추가, 유효한 URL 텍스트는 handleAddByUrl로 처리
@@ -339,10 +395,11 @@ function App() {
         }
       }
 
-      // 텍스트가 유효한 URL인 경우
+      // 텍스트가 유효한 URL인 경우: 입력창에 채운 뒤 기존 핸들러로 처리
       const text = (e.clipboardData?.getData('text/plain') ?? '').trim()
       if (urlRegex.test(text)) {
-        handleAddByUrl(text)
+        setUrlValue(text)
+        handleAddByUrl()
       }
     }
     window.addEventListener('paste', onPaste)
@@ -405,16 +462,18 @@ function App() {
   }, [])
 
   return (
-    <div className="flex min-h-screen flex-col gap-4 p-4 bg-[#1e1e1e] text-white">
-      <header className="shrink-0 rounded-xl border border-[#3c3c3c] bg-[#252526] p-4 shadow-sm">
-        <Input
-          id="board-title"
-          value={boardTitle}
-          onChange={(e) => setBoardTitle(e.target.value)}
-          placeholder="제목을 입력하세요"
-          className="h-auto border-none bg-transparent px-0 py-0 text-center text-3xl font-black text-white shadow-none outline-none placeholder:text-gray-600 focus-visible:ring-0 md:text-5xl"
-        />
-      </header>
+    <div className="flex min-h-screen flex-col gap-4 p-4 bg-[#0f172a] text-white">
+      {/* 💡 캡처 대상: 제목 + 티어 행 + 하단 액션 버튼을 하나의 단단한 사진으로 감싸는 메인 외부 컨테이너 */}
+      <div ref={tierBoardRef} className="flex flex-1 flex-col gap-4 rounded-xl bg-[#0f172a] p-6">
+        <header className="shrink-0 rounded-xl border border-[#3c3c3c] bg-[#252526] p-4 shadow-sm">
+          <Input
+            id="board-title"
+            value={boardTitle}
+            onChange={(e) => setBoardTitle(e.target.value)}
+            placeholder="제목을 입력하세요"
+            className="h-auto border-none bg-transparent px-0 py-0 text-center text-3xl font-black text-white shadow-none outline-none placeholder:text-gray-600 focus-visible:ring-0 md:text-5xl"
+          />
+        </header>
       <Kanban
         value={columns}
         onValueChange={setColumns}
@@ -470,16 +529,28 @@ function App() {
               )
             })}
 
-            {/* 🎯 새 티어 행 추가 버튼 (STORAGE 직전) */}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={addTierRow}
-              className="h-9 w-full border-dashed border-[#4a4a4a] bg-transparent text-gray-400 hover:bg-white/5 hover:text-white"
-            >
-              <Plus className="w-4 h-4 mr-2 shrink-0" />
-              티어 행 추가
-            </Button>
+            {/* 🎯 새 티어 행 추가 + PNG로 저장 버튼 (STORAGE 직전, 동일한 프리미엄 다크 스타일) */}
+            <div className="flex flex-row items-center gap-3">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={addTierRow}
+                className="h-auto flex-1 border border-white/10 bg-white/5 text-gray-300 font-medium py-2.5 px-4 rounded-xl transition-all hover:bg-white/10 hover:text-white"
+              >
+                <Plus className="w-4 h-4 mr-2 shrink-0" />
+                티어 행 추가
+              </Button>
+              {/* 🎯 PNG로 저장 버튼 (티어 보드만 캡처) */}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleDownloadPNG}
+                className="h-auto flex-1 border border-white/10 bg-white/5 text-gray-300 font-medium py-2.5 px-4 rounded-xl transition-all hover:bg-white/10 hover:text-white"
+              >
+                <ImageDown className="w-4 h-4 mr-2 shrink-0" />
+                PNG로 저장
+              </Button>
+            </div>
 
             {/* 2. 하단 대기 아이템 섹션 */}
             <KanbanColumn value={STORAGE_ID}>
@@ -557,6 +628,7 @@ function App() {
           </div>
         </SortableContext>
       </Kanban>
+      </div>
     </div>
   )
 }
