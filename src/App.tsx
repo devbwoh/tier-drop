@@ -449,6 +449,21 @@ function App() {
     setColumns((prev) => ({ ...prev, STORAGE: [...prev.STORAGE, ...newCards] }))
   }, [])
 
+  // 💡 특정 티어 행에 파일을 드롭하면 해당 행에만 카드 추가 (전역 드롭으로 버블업 방지)
+  const handleDropIntoRow = useCallback((e: React.DragEvent<HTMLDivElement>, rowId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const files = e.dataTransfer?.files
+    if (!files || files.length === 0) return
+    const newCards: CardData[] = Array.from(files).filter((f) => f.type.startsWith('image/')).map((file) => ({
+      id: crypto.randomUUID(),
+      imageUrl: URL.createObjectURL(file),
+      name: '',
+    }))
+    if (newCards.length === 0) return
+    setColumns((prev) => ({ ...prev, [rowId]: [...(prev[rowId] ?? []), ...newCards] }))
+  }, [])
+
   // 💡 티어 행을 드래그할 때, 카드가 아닌 "행 전체"를 따라다니는 미리보기(오버레이)입니다.
   const renderColumnOverlay = ({ value }: { value: string | number }) => {
     const tierId = String(value)
@@ -516,7 +531,7 @@ function App() {
               const color = tierColors[id] ?? TIER_COLORS[0]
               return (
                 <KanbanColumn key={id} value={id}>
-                  <div className="group relative flex rounded-lg border border-[#3c3c3c] bg-[#2d2d2d] overflow-hidden min-h-[140px]">
+                  <div className="group relative flex rounded-lg border border-[#3c3c3c] bg-[#2d2d2d] overflow-hidden min-h-[140px]" onDragOver={handleDragOver} onDrop={(e) => handleDropIntoRow(e, id)}>
 
                     {/* 🎯 왼쪽 등급 가로 라벨 판넬 박스 (클릭해서 이름 수정 가능!) */}
                     <div className={`flex w-16 items-center justify-center border-r border-[#3c3c3c] select-none text-center text-sm ${color}`}>
