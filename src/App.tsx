@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Upload, Link as LinkIcon, X } from 'lucide-react'
+import { Upload, Link as LinkIcon, X, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useSortable, SortableContext, horizontalListSortingStrategy, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -20,13 +20,26 @@ interface CardData {
 
 type Columns = Record<string, CardData[]>
 
-const TIER_ROWS = [
-  { id: 'SS', color: 'bg-red-500/30 text-red-200 font-black border-red-500/40' },
-  { id: 'S', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
-  { id: 'A', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
-  { id: 'B', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
-  { id: 'C', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+// 💡 기본 티어 행의 색상 팔레트 (순환해서 새 행에 배정)
+const TIER_COLORS = [
+  'bg-red-500/30 text-red-200 font-black border-red-500/40',
+  'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+  'bg-green-500/20 text-green-400 border-green-500/30',
+  'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  'bg-pink-500/20 text-pink-400 border-pink-500/30',
+  'bg-teal-500/20 text-teal-400 border-teal-500/30',
 ]
+
+// 💡 각 티어 행의 메타데이터 (색상). 순서와 라벨은 상태에 보관합니다.
+const TIER_COLORS_BY_ID: Record<string, string> = {
+  SS: TIER_COLORS[0],
+  S: TIER_COLORS[1],
+  A: TIER_COLORS[2],
+  B: TIER_COLORS[3],
+  C: TIER_COLORS[4],
+}
 
 const STORAGE_ID = 'STORAGE'
 
@@ -199,8 +212,48 @@ function App() {
     SS: 'SS', S: 'S', A: 'A', B: 'B', C: 'C',
   })
 
+  // 💡 각 티어의 색상 클래스를 상태에 보관합니다. (기본값은 TIER_COLORS_BY_ID)
+  const [tierColors, setTierColors] = useState<Record<string, string>>({ ...TIER_COLORS_BY_ID })
+
   const setTierLabel = useCallback((id: string, label: string) => {
     setTierLabels((prev) => ({ ...prev, [id]: label }))
+  }, [])
+
+  // 💡 새 티어 행을 추가합니다. STORAGE 직전에 삽입하고 색상/라벨을 배정합니다.
+  const addTierRow = useCallback(() => {
+    const id = `TIER_${crypto.randomUUID().slice(0, 8)}`
+    setColumns((prev) => {
+      const keys = Object.keys(prev)
+      const storageIdx = keys.indexOf(STORAGE_ID)
+      const newKeys = [...keys.slice(0, storageIdx), id, ...keys.slice(storageIdx)]
+      const next: Columns = {}
+      for (const key of newKeys) next[key] = prev[key] ?? []
+      return next
+    })
+    setTierColors((prev) => ({ ...prev, [id]: TIER_COLORS[Object.keys(prev).length % TIER_COLORS.length] }))
+    setTierLabels((prev) => ({ ...prev, [id]: '' }))
+  }, [])
+
+  // 💡 특정 티어 행을 삭제합니다. (STORAGE는 고정이라 제외)
+  const removeTierRow = useCallback((id: string) => {
+    if (id === STORAGE_ID) return
+    setColumns((prev) => {
+      const next: Columns = {}
+      for (const key of Object.keys(prev)) {
+        if (key !== id) next[key] = prev[key]
+      }
+      return next
+    })
+    setTierColors((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+    setTierLabels((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
   }, [])
 
   // 💡 카드 이동은 라이브러리 기본 동작(라이브 미리보기 + 드롭 시 커밋)이 처리합니다.
@@ -244,7 +297,7 @@ function App() {
   }
 
   // 💡 붙여넣은 URL이 http(s)인지만 확인하고 즉시 보관함에 카드 추가 (CORS 차단 방지용)
-  const handleAddByUrl = (pastedUrl?: string) => {
+  const handleAddByUrl = useCallback((pastedUrl?: string) => {
     const url = (pastedUrl ?? urlValue).trim()
     if (!url || isFetchingUrl) return
     setUrlError(null)
@@ -259,7 +312,7 @@ function App() {
     const newCard: CardData = { id: crypto.randomUUID(), imageUrl: url, name: '' }
     setColumns((prev) => ({ ...prev, STORAGE: [...prev.STORAGE, newCard] }))
     if (pastedUrl === undefined) setUrlValue('')
-  }
+  }, [urlValue, isFetchingUrl])
 
   // 💡 전역 Ctrl+V 리스너: 이미지(블롭)는 즉시 보관함에 추가, 유효한 URL 텍스트는 handleAddByUrl로 처리
   useEffect(() => {
@@ -309,11 +362,10 @@ function App() {
   // 💡 티어 행을 드래그할 때, 카드가 아닌 "행 전체"를 따라다니는 미리보기(오버레이)입니다.
   const renderColumnOverlay = ({ value }: { value: string | number }) => {
     const tierId = String(value)
-    if (tierId === STORAGE_ID || !TIER_ROWS.some((t) => t.id === tierId)) return null
-    const tier = TIER_ROWS.find((t) => t.id === tierId)!
+    if (tierId === STORAGE_ID || !(tierId in columns)) return null
     return (
       <div className="flex rounded-lg border-2 border-dashed border-white/40 bg-[#2d2d2d]/95 shadow-xl overflow-hidden min-h-[140px]">
-        <div className={`flex w-16 items-center justify-center border-r border-[#3c3c3c] select-none text-center text-sm ${tier.color}`}>
+        <div className={`flex w-16 items-center justify-center border-r border-[#3c3c3c] select-none text-center text-sm ${tierColors[tierId]}`}>
           {tierLabels[tierId]}
         </div>
         <div className="flex-1 flex flex-row flex-wrap items-center gap-3 p-3">
@@ -369,27 +421,38 @@ function App() {
           <div className="flex flex-1 flex-col gap-4 overflow-y-auto">
             {/* 1. SS ~ C 등급 티어 리스트 섹션 (왼쪽 네온 컬러 라벨 판넬 적용) */}
             {Object.keys(columns).filter((id) => id !== STORAGE_ID).map((id) => {
-              const tier = TIER_ROWS.find((t) => t.id === id)!
+              const color = tierColors[id] ?? TIER_COLORS[0]
               return (
-                <KanbanColumn key={tier.id} value={tier.id}>
+                <KanbanColumn key={id} value={id}>
                   <div className="relative flex rounded-lg border border-[#3c3c3c] bg-[#2d2d2d] overflow-hidden min-h-[140px]">
 
                     {/* 🎯 왼쪽 등급 가로 라벨 판넬 박스 (클릭해서 이름 수정 가능!) */}
-                    <div className={`flex w-16 items-center justify-center border-r border-[#3c3c3c] select-none text-center text-sm ${tier.color}`}>
-                      <TierLabel value={tierLabels[tier.id]} color={tier.color} onChange={(label) => setTierLabel(tier.id, label)} />
+                    <div className={`flex w-16 items-center justify-center border-r border-[#3c3c3c] select-none text-center text-sm ${color}`}>
+                      <TierLabel value={tierLabels[id]} color={color} onChange={(label) => setTierLabel(id, label)} />
                     </div>
 
                     {/* 🎯 행 전체를 드래그해서 순서를 바꿀 수 있는 핸들 (카드 드래그와 충돌 방지용) */}
                     <KanbanColumnHandle className="absolute left-0 top-0 bottom-0 w-2 cursor-grab active:cursor-grabbing bg-white/5 hover:bg-white/15 transition-colors z-10" />
 
+                    {/* 🎯 행 삭제 버튼 (마우스를 올리면 나타남) */}
+                    <button
+                      type="button"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={() => removeTierRow(id)}
+                      title="티어 행 삭제"
+                      className="absolute top-1 right-1 z-20 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-gray-400 hover:bg-red-600 hover:text-white transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+
                     {/* 우측 카드 전개 및 드롭 구역 */}
                     <div className="flex-1 w-full">
-                      <SortableContext items={columns[tier.id].map(c => c.id)} strategy={horizontalListSortingStrategy}>
+                      <SortableContext items={columns[id].map(c => c.id)} strategy={horizontalListSortingStrategy}>
                         <KanbanColumnContent
-                          value={tier.id}
+                          value={id}
                           className="flex flex-1 w-full h-full flex-row flex-wrap items-center gap-3 p-3 transition-all duration-200"
                         >
-                          {columns[tier.id].map((card) => (
+                          {columns[id].map((card) => (
                             <KanbanItem key={card.id} value={card.id}>
                               <CardView card={card} onNameChange={setCardName} onDelete={deleteCard} />
                             </KanbanItem>
@@ -402,6 +465,17 @@ function App() {
                 </KanbanColumn>
               )
             })}
+
+            {/* 🎯 새 티어 행 추가 버튼 (STORAGE 직전) */}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={addTierRow}
+              className="h-9 w-full border-dashed border-[#4a4a4a] bg-transparent text-gray-400 hover:bg-white/5 hover:text-white"
+            >
+              <Plus className="w-4 h-4 mr-2 shrink-0" />
+              티어 행 추가
+            </Button>
 
             {/* 2. 하단 STORAGE (보관함) 섹션 */}
             <KanbanColumn value={STORAGE_ID}>
