@@ -632,6 +632,11 @@ function App() {
           </div>
         </SortableContext>
       </Kanban>
+
+      {/* 💡 최하단 저작권/데이터 안내 문구 */}
+      <footer className="shrink-0 px-2 pb-1 text-center text-xs leading-relaxed text-gray-500">
+        본 사이트는 사용자의 어떠한 이미지 데이터도 서버에 수집하거나 저장하지 않습니다. 모든 이미지의 권리는 원저작권자에게 있으며, 개인이 추가한 이미지로 인해 발생하는 저작권 관련 문제의 책임은 사용자 본인에게 있습니다.
+      </footer>
       </div>
     </div>
   )
