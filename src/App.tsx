@@ -281,7 +281,7 @@ function App() {
     const trigger = () => {
       try {
         // 💡 pixelRatio: 2로 캔버스 스케일 트리거를 강제해 html-to-image가 매번 새 캔버스를 생성하게 합니다.
-        toPng(tierBoardRef.current, {
+        toPng(tierBoardRef.current!, {
           cacheBust: false, // Turn off cache busting to protect local Blob URLs
           pixelRatio: 2,
           backgroundColor: '#0f172a', // Enforce solid dark slate background (bg-slate-900 equivalent)
