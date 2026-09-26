@@ -427,6 +427,28 @@ function App() {
     })
   }, [])
 
+  // 💡 전역 파일 드래그 & 드롭: OS 탐색기에서 이미지를 끌어다 놓으면 즉시 보관함에 카드 추가
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const files = e.dataTransfer?.files
+    if (!files || files.length === 0) return
+    const newCards: CardData[] = Array.from(files).filter((f) => f.type.startsWith('image/')).map((file) => ({
+      id: crypto.randomUUID(),
+      imageUrl: URL.createObjectURL(file),
+      name: '',
+    }))
+    if (newCards.length === 0) return
+    setColumns((prev) => ({ ...prev, STORAGE: [...prev.STORAGE, ...newCards] }))
+  }, [])
+
   // 💡 티어 행을 드래그할 때, 카드가 아닌 "행 전체"를 따라다니는 미리보기(오버레이)입니다.
   const renderColumnOverlay = ({ value }: { value: string | number }) => {
     const tierId = String(value)
@@ -469,7 +491,7 @@ function App() {
   }, [])
 
   return (
-    <div className="flex min-h-screen flex-col gap-4 p-4 bg-[#0f172a] text-white">
+    <div className="flex min-h-screen flex-col gap-4 p-4 bg-[#0f172a] text-white" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
       {/* 💡 캡처 대상: 제목 + 티어 행 + 하단 액션 버튼을 하나의 단단한 사진으로 감싸는 메인 외부 컨테이너 */}
       <div ref={tierBoardRef} className="flex flex-1 flex-col gap-4 rounded-xl bg-[#0f172a] p-6">
         <header className="shrink-0 rounded-xl border border-[#3c3c3c] bg-[#252526] p-4 shadow-sm">
