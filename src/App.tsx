@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toPng } from 'html-to-image'
+import { QRCodeSVG } from 'qrcode.react'
 import { Upload, Link as LinkIcon, X, Plus, Trash2, ImageDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -621,6 +622,17 @@ function App() {
                 <ImageDown className="w-4 h-4 mr-2 shrink-0" />
                 PNG로 저장
               </Button>
+              {/* 🎯 QR 코드 워터마크 (우측 하단, 캡처 프레임 안에 자연스럽게 클립) */}
+              <div className="flex flex-col items-center gap-1 opacity-70 hover:opacity-100 transition-opacity shrink-0">
+                <QRCodeSVG
+                  value="https://devbwoh.github.io/tier-drop/"
+                  size={60}
+                  bgColor="#0f172a"
+                  fgColor="#ffffff"
+                  level="L"
+                />
+                <span className="text-[10px] text-gray-400 font-medium tracking-wider">tier-drop</span>
+              </div>
             </div>
 
             {/* 2. 하단 대기 아이템 섹션 */}
