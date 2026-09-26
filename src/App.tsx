@@ -362,20 +362,23 @@ function App() {
       return
     }
 
-    // 💡 카드 추가 전 fetch로 최종 리다이렉트된 고유 URL을 잠가 캔버스 재렌더 시 이미지 변경 방지
-    let resolvedUrl = targetUrl
+    // 💡 카드 추가 전 CORS 검증: GET 요청이 성공해야만 외부 서버가 크로스오리진 접근을 허용한다는 뜻
     try {
-      const response = await fetch(targetUrl)
-      if (response.url && /^https?:\/\//i.test(response.url)) {
-        resolvedUrl = response.url
-      }
-    } catch {
-      // fetch 실패 시 원본 URL을 기본 버퍼로 유지
-    }
+      const response = await fetch(targetUrl, { method: 'GET', mode: 'cors' })
+      if (!response.ok) throw new Error()
 
-    const newCard: CardData = { id: crypto.randomUUID(), imageUrl: resolvedUrl, name: '' }
-    setColumns((prev) => ({ ...prev, STORAGE: [...prev.STORAGE, newCard] }))
-    setUrlValue('')
+      // Success: Use the resolved redirect URL (e.g. response.url) to prevent picsum from changing upon PNG export later!
+      const finalUrl = response.url
+      const newCard: CardData = { id: crypto.randomUUID(), imageUrl: finalUrl, name: '' }
+      setColumns((prev) => ({ ...prev, STORAGE: [...prev.STORAGE, newCard] }))
+      setUrlValue('')
+    } catch (error) {
+      // Only blocks actual strict firewall violations (like Naver News URL)
+      alert(
+        '선택하신 이미지는 해당 웹사이트의 보안 정책(CORS)으로 인해 주소로 추가할 수 없습니다. 대신 이미지를 마우스 우클릭 후 \'이미지 복사\'를 선택하여, 화면 위에서 Ctrl+V(붙여넣기)로 추가해 주세요!'
+      )
+      setUrlValue('')
+    }
   }, [urlValue, isFetchingUrl])
 
   // 💡 전역 Ctrl+V 리스너: 이미지(블롭)는 즉시 보관함에 추가, 유효한 URL 텍스트는 handleAddByUrl로 처리
