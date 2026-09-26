@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { Upload } from 'lucide-react'
+import { Upload, Link as LinkIcon, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useSortable, SortableContext, horizontalListSortingStrategy, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -127,12 +127,13 @@ function CardView({
       {...attributes}
       {...listeners}
     >
-      {/* 1. 이미지 레이어 */}
+      {/* 1. 이미지 레이어 (로딩 실패 시 카드를 상태에서 자동 제거) */}
       <img
         src={card.imageUrl}
         alt={card.name || '카드 이미지'}
         className="absolute inset-0 w-full h-full object-cover"
         draggable={false}
+        onError={() => onDelete(card.id)}
       />
 
       {/* 🎯 2. 개별 카드 우측 상단 '삭제 (X)' 버튼 */}
@@ -208,6 +209,11 @@ function App() {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // 💡 URL 입력 상태 및 로딩/오류 표시용 상태
+  const [urlValue, setUrlValue] = useState('')
+  const [isFetchingUrl] = useState(false)
+  const [urlError, setUrlError] = useState<string | null>(null)
+
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files || files.length === 0) return
@@ -221,6 +227,38 @@ function App() {
       STORAGE: [...prev.STORAGE, ...newCards],
     }))
     e.target.value = ''
+  }
+
+  // 💡 입력창에 포커스(클릭) 시 클립보드의 유효한 URL이 있으면 즉시 자동 채우기
+  const handleUrlFocus = async () => {
+    try {
+      if (!navigator.clipboard?.readText) return
+      const text = (await navigator.clipboard.readText()).trim()
+      // 일반 텍스트/무관한 스니펫을 걸러내기 위해 http(s):// 로 시작하는 URL만 허용
+      const urlRegex = /^https?:\/\/[^\s]+$/i
+      if (!text || !urlRegex.test(text)) return
+      setUrlValue(text)
+    } catch {
+      // 클립보드 권한 거부 등은 조용히 무시
+    }
+  }
+
+  // 💡 붙여넣은 URL이 http(s)인지만 확인하고 즉시 보관함에 카드 추가 (CORS 차단 방지용)
+  const handleAddByUrl = () => {
+    const url = urlValue.trim()
+    if (!url || isFetchingUrl) return
+    setUrlError(null)
+
+    // 💡 fetch/헤더 검사 없이 http(s) URL이면 바로 카드 추가. 깨진 이미지는 <img> onError가 처리
+    const urlRegex = /^https?:\/\/[^\s]+$/i
+    if (!urlRegex.test(url)) {
+      setUrlError('http:// 또는 https:// 로 시작하는 유효한 URL을 입력해 주세요.')
+      return
+    }
+
+    const newCard: CardData = { id: crypto.randomUUID(), imageUrl: url, name: '' }
+    setColumns((prev) => ({ ...prev, STORAGE: [...prev.STORAGE, newCard] }))
+    setUrlValue('')
   }
 
   const setCardName = useCallback((id: string, name: string) => {
@@ -338,12 +376,46 @@ function App() {
             <KanbanColumn value={STORAGE_ID}>
               <div className="flex flex-col rounded-lg border border-[#3c3c3c] bg-[#2d2d2d] overflow-hidden min-h-[160px]">
                 {/* 상단 컨트롤 바 */}
-                <div className="flex items-center justify-between border-b border-[#3c3c3c] bg-[#252526] px-4 py-2">
-                  <span className="text-sm font-bold text-gray-300">{STORAGE_ID} (보관함)</span>
-                  <Button size="sm" onClick={() => fileInputRef.current?.click()} className="bg-blue-600 hover:bg-blue-700 h-8">
-                    <Upload className="w-4 h-4 mr-2" />
-                    이미지 업로드
-                  </Button>
+                <div className="flex flex-col gap-2 border-b border-[#3c3c3c] bg-[#252526] px-4 py-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold text-gray-300">{STORAGE_ID} (보관함)</span>
+                    <Button size="sm" onClick={() => fileInputRef.current?.click()} className="bg-blue-600 hover:bg-blue-700 h-8 w-36">
+                      <Upload className="w-4 h-4 mr-2 shrink-0" />
+                      이미지 업로드
+                    </Button>
+                  </div>
+
+                  {/* 💡 URL 붙여넣기 입력줄 */}
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1 min-w-0">
+                      <Input
+                        value={urlValue}
+                        onFocus={handleUrlFocus}
+                        onChange={(e) => { setUrlValue(e.target.value); if (urlError) setUrlError(null) }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleAddByUrl() }}
+                        placeholder="이미지 URL을 붙여넣고 Enter"
+                        className="h-8 w-full bg-black/30 pr-8 text-sm text-white placeholder:text-gray-500"
+                      />
+                      {/* 💡 텍스트가 있을 때만 나타나는 '지우기' 버튼 (입력창 우측 안쪽에 절대 위치) */}
+                      {urlValue && (
+                        <button
+                          type="button"
+                          onClick={() => setUrlValue('')}
+                          title="URL 지우기"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-white/10 hover:text-white cursor-pointer"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <Button size="sm" onClick={handleAddByUrl} disabled={isFetchingUrl || !urlValue.trim()} className="bg-green-600 hover:bg-green-700 h-8 w-36 shrink-0">
+                      <LinkIcon className={`w-4 h-4 mr-2 shrink-0 ${isFetchingUrl ? 'animate-spin' : ''}`} />
+                      {isFetchingUrl ? '불러오는 중...' : 'URL로 추가'}
+                    </Button>
+                  </div>
+                  {urlError && (
+                    <p className="text-xs text-red-400">{urlError}</p>
+                  )}
                 </div>
                 <input
                   ref={fileInputRef}
