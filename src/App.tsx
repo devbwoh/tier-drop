@@ -20,14 +20,74 @@ interface CardData {
 type Columns = Record<string, CardData[]>
 
 const TIER_ROWS = [
-  { id: 'SS', label: 'SS', color: 'bg-red-500/30 text-red-200 font-black border-red-500/40' },
-  { id: 'S', label: 'S', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
-  { id: 'A', label: 'A', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
-  { id: 'B', label: 'B', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
-  { id: 'C', label: 'C', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+  { id: 'SS', color: 'bg-red-500/30 text-red-200 font-black border-red-500/40' },
+  { id: 'S', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+  { id: 'A', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
+  { id: 'B', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
+  { id: 'C', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
 ]
 
 const STORAGE_ID = 'STORAGE'
+
+const noopDelete = () => {}
+
+// 💡 티어 라벨을 클릭해서 수정할 수 있는 편집 컴포넌트입니다.
+function TierLabel({
+  value,
+  color,
+  onChange,
+}: {
+  value: string
+  color: string
+  onChange: (label: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+
+  const commit = () => {
+    onChange(draft.trim())
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <Input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onPointerDown={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          e.stopPropagation()
+          if (e.key === 'Enter') commit()
+          if (e.key === 'Escape') {
+            setDraft(value)
+            setEditing(false)
+          }
+        }}
+        onBlur={commit}
+        // 💡 bg-black/40(어두운 반투명)과 깔끔한 흰색 테두리를 적용했습니다.
+        className="h-full w-full border border-white/20 bg-black/40 p-0 text-center font-bold text-white outline-none ring-0 focus:border-white/40 focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-md"
+        style={{ boxShadow: 'none' }}
+      />
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={() => {
+        setDraft(value)
+        setEditing(true)
+      }}
+      // 💡 별도의 배경 덧칠 없이 글자만 중앙에 깔끔하게 띄우도록 투명화했습니다.
+      className="w-full h-full cursor-pointer select-none bg-transparent text-center font-bold text-white outline-none border-0 transition-colors hover:brightness-125"
+      title="티어 이름 수정"
+    >
+      {value || '이름 입력'}
+    </button>
+  )
+}
 
 // 💡 props에 onDelete를 추가합니다.
 function CardView({
@@ -127,9 +187,18 @@ function CardView({
 }
 
 function App() {
+  const [boardTitle, setBoardTitle] = useState('나만의 티어표')
   const [columns, setColumns] = useState<Columns>({
     SS: [], S: [], A: [], B: [], C: [], STORAGE: [],
   })
+  // 💡 각 티어의 표시 이름을 상태에 보관합니다. (기본값은 티어 ID)
+  const [tierLabels, setTierLabels] = useState<Record<string, string>>({
+    SS: 'SS', S: 'S', A: 'A', B: 'B', C: 'C',
+  })
+
+  const setTierLabel = useCallback((id: string, label: string) => {
+    setTierLabels((prev) => ({ ...prev, [id]: label }))
+  }, [])
   
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -147,46 +216,6 @@ function App() {
     }))
     e.target.value = ''
   }
-
-  // 🎯 ReUI 순정 애니메이션과 결합된 드래그 오버 핸들러
-  const handleDragOver = useCallback((event: any) => {
-    const { active, over } = event
-    if (!over) return
-
-    const activeContainer = active.data.current?.sortable?.containerId || active.id
-    let overId = over.id
-    
-    const isContainer = TIER_ROWS.some(t => t.id === overId) || overId === STORAGE_ID
-    let overContainer = isContainer ? overId : (over.data.current?.sortable?.containerId || over.id)
-
-    if (activeContainer === overContainer) return
-
-    setColumns((prev) => {
-      const activeItems = prev[activeContainer] || []
-      const overItems = prev[overContainer] || []
-
-      const activeIndex = activeItems.findIndex((i) => i.id === active.id)
-      let overIndex = overItems.findIndex((i) => i.id === overId)
-
-      if (isContainer || overIndex === -1 || overIndex === overItems.length - 1) {
-        overIndex = overItems.length
-      }
-
-      const newActiveItems = [...activeItems]
-      const [movedItem] = newActiveItems.splice(activeIndex, 1)
-
-      if (!movedItem) return prev
-
-      const newOverItems = [...overItems]
-      newOverItems.splice(overIndex, 0, movedItem)
-
-      return {
-        ...prev,
-        [activeContainer]: newActiveItems,
-        [overContainer]: newOverItems,
-      }
-    })
-  }, [])
 
   const setCardName = useCallback((id: string, name: string) => {
     setColumns((prev) => {
@@ -206,7 +235,7 @@ function App() {
     if (variant !== 'item') return null
     for (const key of Object.keys(columns)) {
       const card = columns[key].find((c) => c.id === String(value))
-      if (card) return <CardView card={card} onNameChange={setCardName} />
+      if (card) return <CardView card={card} onNameChange={setCardName} onDelete={noopDelete} />
     }
     return null
   }
@@ -227,11 +256,19 @@ function App() {
 
   return (
     <div className="flex h-screen flex-col gap-4 p-4 bg-[#1e1e1e] text-white">
+      <header className="shrink-0 rounded-xl border border-[#3c3c3c] bg-[#252526] p-4 shadow-sm">
+        <Input
+          id="board-title"
+          value={boardTitle}
+          onChange={(e) => setBoardTitle(e.target.value)}
+          placeholder="제목을 입력하세요"
+          className="h-auto border-none bg-transparent px-0 py-0 text-center text-3xl font-black text-white shadow-none outline-none placeholder:text-gray-600 focus-visible:ring-0 md:text-5xl"
+        />
+      </header>
       <Kanban
         value={columns}
         onValueChange={setColumns}
         getItemValue={(item) => item.id}
-        onDragOver={handleDragOver}
       >
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto">
           {/* 1. SS ~ C 등급 티어 리스트 섹션 (왼쪽 네온 컬러 라벨 판넬 적용) */}
@@ -239,9 +276,9 @@ function App() {
             <KanbanColumn key={tier.id} value={tier.id}>
               <div className="flex rounded-lg border border-[#3c3c3c] bg-[#2d2d2d] overflow-hidden min-h-[140px]">
                 
-                {/* 🎯 왼쪽 등급 가로 라벨 판넬 박스 (은은한 배경색과 글자색 복구!) */}
-                <div className={`flex w-16 items-center justify-center font-black border-r border-[#3c3c3c] select-none text-center text-sm ${tier.color}`}>
-                  {tier.label}
+                {/* 🎯 왼쪽 등급 가로 라벨 판넬 박스 (클릭해서 이름 수정 가능!) */}
+                <div className={`flex w-16 items-center justify-center border-r border-[#3c3c3c] select-none text-center text-sm ${tier.color}`}>
+                  <TierLabel value={tierLabels[tier.id]} color={tier.color} onChange={(label) => setTierLabel(tier.id, label)} />
                 </div>
 
                 {/* 우측 카드 전개 및 드롭 구역 */}
