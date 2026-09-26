@@ -1,6 +1,7 @@
 # Tier-Drop (나만의 티어표)
 
-[![Tier Drop Site](https://shields.io)](https://devbwoh.github.io/tier-drop/)
+[![GitHub Pages](https://img.shields.io/badge/GitHub_Pages-Live_Demo-3178C6?style=for-the-badge&logo=github&logoColor=white)](https://devbwoh.github.io/tier-drop/)
+
 
 > **Drag, Paste, and Drop!**  
 > 유저 친화형 티어표입니다.
