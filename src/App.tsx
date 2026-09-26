@@ -289,7 +289,11 @@ function App() {
           }
         }).then((dataUrl) => {
           const sanitizedTitle = boardTitle?.trim()
-          const fileName = sanitizedTitle ? `${sanitizedTitle}.png` : 'tier-list.png'
+          const now = new Date()
+          const pad = (n: number) => String(n).padStart(2, '0')
+          const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+          const baseName = sanitizedTitle || 'tier-list'
+          const fileName = `${baseName}-${timestamp}.png`
 
           const link = document.createElement('a')
           link.download = fileName
